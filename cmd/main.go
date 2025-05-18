@@ -17,8 +17,8 @@ func main() {
 	db.Init()
 	e := echo.New()
 	e.Use(session.Middleware(sessions.NewCookieStore([]byte("secret-key"))))
-	e.GET("/tasks", handlers.GetTasks)
-	e.GET("/tasks/:id", handlers.GetTaskByID)
+	e.GET("/productos", handlers.GetTasks)
+	e.GET("/productos/:id", handlers.GetTaskByID)
 	e.POST("/login", handlers.LoginUser)
 
 	//////////////////////////////////////////////////////////
@@ -30,14 +30,14 @@ func main() {
 
 	////////////////////////////////////////////////////////////
 
-	r := e.Group("/tasks")
+	r := e.Group("/loged")
 	r.Use(AuthMiddleware)
 
-	r.POST("/tasks", handlers.PostTask)
-	r.PUT("/tasks", handlers.UpdateTask)
-	r.DELETE("/:id", handlers.DeleteTask)
+	r.POST("/post", handlers.PostProduct)
+	r.PUT("/update", handlers.UpdateProduct)
+	r.DELETE("/delete", handlers.DeleteProduct)
 	r.DELETE("/delete/all", handlers.DeleteAllTasks)
-	r.POST("/users/", handlers.RegisterUser)
+	r.POST("/register", handlers.RegisterUser)
 	r.POST("/close", handlers.Logout)
 	//r.GET("/users/:id", handlers.GetUserByID)
 	//r.PUT("/users/:id", handlers.UpdateUser)

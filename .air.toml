@@ -1,0 +1,9 @@
+# .air.toml
+[build]
+  cmd = "go run ./cmd/main.go"
+  bin = "tmp/main"
+  includeExt = ["go"]
+  excludeDir = ["vendor", "data"]
+
+[log]
+  time = true

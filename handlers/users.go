@@ -13,6 +13,12 @@ import (
 )
 
 func RegisterUser(c echo.Context) error {
+	sess, _ := session.Get("session", c)
+	userID, ok := sess.Values["userID"].(int)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Usuario no autenticado"})
+	}
+
 	var newUser models.Users
 
 	if err := c.Bind(&newUser); err != nil {
@@ -37,12 +43,16 @@ func RegisterUser(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error consultando la base de datos"})
 	}
+	_, err = db.DB.Exec("INSERT INTO acciones_usuario (id_usuario, id_articulo, tipo_accion) VALUES ($1, $2, $3)",
+		userID, newUser.ID, "Alta Usuario")
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando la tarea"})
+	}
 	//newUser.Password = ""
 	return c.JSON(http.StatusOK, echo.Map{"Message": "Usuario agregado", "username": newUser.Username, "id": newUser.ID, "password": newUser.Password})
 }
 
 func LoginUser(c echo.Context) error {
-
 	var user models.Users
 	var hashedpassword string
 	if err := c.Bind(&user); err != nil {
@@ -68,6 +78,7 @@ func LoginUser(c echo.Context) error {
 
 	sess, _ := session.Get("session", c)
 	sess.Values["username"] = user.Username
+	sess.Values["userID"] = user.ID
 	sess.Save(c.Request(), c.Response())
 
 	return c.JSON(http.StatusOK, echo.Map{
@@ -83,10 +94,20 @@ func Logout(c echo.Context) error {
 }
 
 func DeleteUser(c echo.Context) error {
+	sess, _ := session.Get("session", c)
+	userID, ok := sess.Values["userID"].(int)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Usuario no autenticado"})
+	}
 	id := c.Param("id")
 	_, err := db.DB.Exec("DELETE FROM usuarios WHERE id = $1", id)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error eliminando el usuario"})
+	}
+	_, err = db.DB.Exec("INSERT INTO acciones_usuario (id_usuario, id_articulo, tipo_accion) VALUES ($1, $2, $3)",
+		userID, id, "Baja Usuario")
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando la tarea"})
 	}
 	return c.NoContent(http.StatusNoContent)
 }

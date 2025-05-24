@@ -1,17 +1,19 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/francotraversa/GOLANG/models"
 	"github.com/labstack/echo/v4"
 	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-var DB *sql.DB
+var DB *gorm.DB
 
 func Init() {
 	host := os.Getenv("DB_HOST")
@@ -26,12 +28,11 @@ func Init() {
 	)
 
 	var err error
-	DB, err = sql.Open("postgres", connStr)
+	DB, err = gorm.Open(postgres.Open(connStr), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Error abriendo la conexión:", err)
 	}
 
-	err = DB.Ping()
 	if err != nil {
 		log.Fatal("No se pudo conectar a la DB:", err)
 	}
@@ -40,21 +41,35 @@ func Init() {
 
 }
 
-func Close() {
-	if err := DB.Close(); err != nil {
-		log.Fatal("Error cerrando la conexión a la base de datos:", err)
-	}
-	log.Println("Conexión a la base de datos cerrada.")
-}
-
-func ExistsTaskID(id int, c echo.Context) int {
-	var exists bool
-	err := DB.QueryRow("SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1)", id).Scan(&exists)
-	if err != nil {
+func ExistsUsuarioID(id int, c echo.Context) int {
+	var user models.Users
+	result := DB.Table("usuarios").First(&user, "id = ?", id)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return -1
+		}
 		c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error consultando la base de datos"})
-	}
-	if !exists {
 		return -1
 	}
-	return id
+	return user.ID
+}
+func ExistsProductoID(id int, c echo.Context) int {
+	var producto models.Producto
+	result := DB.Table("productos").First(&producto, "id = ?", id)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return -1
+		}
+		c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error consultando la base de datos"})
+		return -2
+	}
+	return producto.ID
+}
+func GetProductbyID(id int, c echo.Context) (error, bool) {
+	var producto models.AskProducto
+	if err := DB.Table("productos").Where("id = ?", id).First(&producto).Error; err != nil {
+		return c.JSON(http.StatusNotFound, echo.Map{"error": "El Producto ya existe"}), true
+	}
+	return c.JSON(http.StatusOK, producto), false
+
 }

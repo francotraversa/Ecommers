@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/francotraversa/GOLANG/models"
 	db "github.com/francotraversa/GOLANG/storage"
@@ -10,31 +9,24 @@ import (
 )
 
 func UpdateProduct(c echo.Context) error {
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "ID inválido"})
-	}
-
-	identiti := db.ExistsTaskID(id, c)
-	if identiti == -1 {
-		return c.JSON(http.StatusNotFound, echo.Map{"error": "El ID no existe"})
-	}
-
-	var updatedproduct models.Producto
-
-	if err := c.Bind(&updatedproduct); err != nil {
+	var UpdateProduct models.UpdateProduct
+	if err := c.Bind(&UpdateProduct); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Error al parsear JSON"})
 	}
 
-	_, err = db.DB.Exec(
-		"UPDATE productos SET title = $1, description = $2, precio = $3, stock = $4 WHERE id = $5",
-		updatedproduct.Title, updatedproduct.Description, updatedproduct.Price, updatedproduct.Stock, identiti,
-	)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error actualizando la tarea"})
+	producto := db.ExistsProductoID(UpdateProduct.ID, c)
+	switch producto {
+	case -1:
+		return c.JSON(http.StatusNotFound, echo.Map{"error": "Producto no encontrado"})
+	case -2:
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error al consultar la base de datos"})
 	}
 
-	updatedproduct.ID = identiti
-	return c.JSON(http.StatusOK, updatedproduct)
+	if err := db.DB.Model(&models.Producto{}).Where("id = ?", UpdateProduct.ID).Updates(models.Producto{
+		Price: UpdateProduct.Price,
+		Stock: UpdateProduct.Stock,
+	}).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error al actualizar el producto"})
+	}
+	return c.JSON(http.StatusOK, producto)
 }

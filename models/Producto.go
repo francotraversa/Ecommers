@@ -1,37 +1,28 @@
 package models
 
 type Producto struct {
-	ID          int     `json:"id"`
-	Title       string  `json:"titulo"`
-	Description string  `json:"descripcion"`
-	Price       float32 `json:"precio"`
-	Stock       int     `json:"stock"`
+	ID          int     `json:"id" gorm:"primaryKey"`
+	Title       string  `json:"titulo" gorm:"column:titulo"`
+	Description string  `json:"descripcion" gorm:"column:descripcion"`
+	Price       float64 `json:"precio" gorm:"column:precio"`
+	Stock       int     `json:"stock" gorm:"column:stock"`
 }
 
 type Venta struct {
-	ID          int     `json:"id"`
-	Title       string  `json:"titulo"`
-	Description string  `json:"descripcion"`
-	Price       float32 `json:"precio"`
-	Cantidad    int     `json:"cantidad"`
-	Total       float32 `json:"total"`
-	Fecha       string  `json:"fecha"`
+	ID       int `json:"id" gorm:"primaryKey"`
+	Cantidad int `json:"cantidad"`
 }
 
-/*
-login
-
-"username": "admin",
-"contrasena": "admin",
-
-
-
-consultas
-{
-  "id": "21",
-  "title": "travesrsa",
-  "description" : "fran",
-  "completed" : "true"
+type AskProducto struct {
+	ID int `json:"id"`
 }
 
-*/
+type AksVenta struct {
+	ArticuloID int `json:"id"`
+}
+
+type UpdateProduct struct {
+	ID    int     `json:"id" gorm:"primaryKey"`
+	Stock int     `json:"stock" gorm:"column:stock"`
+	Price float64 `json:"precio" gorm:"column:precio"`
+}

@@ -1,24 +1,17 @@
 package handlers
 
 import (
-	"database/sql"
 	"log"
 	"net/http"
 
 	"github.com/francotraversa/GOLANG/models"
 	db "github.com/francotraversa/GOLANG/storage"
-	"github.com/labstack/echo-contrib/session"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func RegisterUser(c echo.Context) error {
-	sess, _ := session.Get("session", c)
-	userID, ok := sess.Values["userID"].(int)
-	if !ok {
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Usuario no autenticado"})
-	}
-
 	var newUser models.Users
 
 	if err := c.Bind(&newUser); err != nil {
@@ -31,83 +24,105 @@ func RegisterUser(c echo.Context) error {
 
 	newUser.Password = string(hashedPassword)
 
-	_, err = db.DB.Exec("INSERT INTO usuarios (username, contrasena) VALUES ($1, $2)",
-		newUser.Username, string(hashedPassword))
-	if err != nil {
+	result := db.DB.Table("usuarios").Create(&newUser)
+
+	if result.Error != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando el usuario"})
 	}
-	err = db.DB.QueryRow("SELECT id FROM usuarios WHERE username = $1", newUser.Username).Scan(&newUser.ID)
-	if err == sql.ErrNoRows {
+
+	useregistered := GetUserByName(newUser.Username)
+
+	if useregistered == nil {
 		log.Println("Usuario no encontrado: ", newUser.Username)
 	}
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error consultando la base de datos"})
+	result = db.DB.Table("acciones_usuario").Create(&models.Accion{
+		//ID_Usuario:  useregistered.ID, Aca tendri que ser el ID del usuario que lo creo
+		ID_Articulo: newUser.ID,
+		Tipo_accion: "Alta Usuario"})
+
+	if result.Error != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando el usuario en Acciones_Usuario"})
 	}
-	_, err = db.DB.Exec("INSERT INTO acciones_usuario (id_usuario, id_articulo, tipo_accion) VALUES ($1, $2, $3)",
-		userID, newUser.ID, "Alta Usuario")
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando la tarea"})
-	}
-	//newUser.Password = ""
-	return c.JSON(http.StatusOK, echo.Map{"Message": "Usuario agregado", "username": newUser.Username, "id": newUser.ID, "password": newUser.Password})
+
+	return c.JSON(http.StatusCreated, &useregistered)
 }
 
 func LoginUser(c echo.Context) error {
-	var user models.Users
-	var hashedpassword string
-	if err := c.Bind(&user); err != nil {
+	var userrequest models.UsersLogin
+	if err := c.Bind(&userrequest); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Error al parsear JSON"})
 	}
 
-	err := db.DB.QueryRow("SELECT username, contrasena FROM usuarios WHERE username = $1",
-		user.Username).Scan(&user.Username, &hashedpassword)
-
-	if err == sql.ErrNoRows {
-		log.Println("Usuario no encontrado: ", user.Username)
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "usuario no encontrado"})
-
-	} else if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error consultando la base de datos"})
+	user := GetUserByName(userrequest.Username)
+	if user == nil {
+		log.Println("Usuario no encontrado: ", userrequest.Username)
+		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Usuario no encontrado"})
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(hashedpassword), []byte(user.Password)); err != nil {
+	log.Print("Usuario encontrado: ", userrequest.Username)
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(userrequest.Password)); err != nil {
 		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Contraseña incorrecta"})
 	}
 
 	log.Println("Se inicio sesión correctamente por el usuario: ", user.Username)
 
-	sess, _ := session.Get("session", c)
-	sess.Values["username"] = user.Username
-	sess.Values["userID"] = user.ID
-	sess.Save(c.Request(), c.Response())
+	uuid := uuid.New().String()
+	err := db.DB.Table("sesiones").Create(&models.Sesion{
+		Usuario_id: user.ID,
+		Uuid:       uuid}).Error
+
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando la sesión"})
+	}
 
 	return c.JSON(http.StatusOK, echo.Map{
-		"message":  "Inicio de sesión exitoso",
-		"username": user.Username})
+		"message": "Inicio de sesión exitoso",
+		"UUID":    uuid})
 }
 
 func Logout(c echo.Context) error {
-	sess, _ := session.Get("session", c)
-	sess.Options.MaxAge = -1 // expira ya
-	sess.Save(c.Request(), c.Response())
+	//err := db.DB.Delete("sesiones").Create(&models.Sesion{
+	//	Usuario_id: user.ID,
+	//	Uuid:       uuid}).Error
+
+	//if err != nil {
+	//	return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando la sesión"})
+	//}
 	return c.JSON(http.StatusOK, echo.Map{"message": "Sesión cerrada"})
 }
 
-func DeleteUser(c echo.Context) error {
-	sess, _ := session.Get("session", c)
-	userID, ok := sess.Values["userID"].(int)
-	if !ok {
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Usuario no autenticado"})
+func DisableUser(c echo.Context) error {
+	var userrequest models.UsersLogin
+	if err := c.Bind(&userrequest); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Error al parsear JSON"})
 	}
-	id := c.Param("id")
-	_, err := db.DB.Exec("DELETE FROM usuarios WHERE id = $1", id)
+	disableuser := GetUserByName(userrequest.Username)
+	err := db.DB.Delete(&models.Users{}, disableuser.ID).Error
+
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error eliminando el usuario"})
 	}
-	_, err = db.DB.Exec("INSERT INTO acciones_usuario (id_usuario, id_articulo, tipo_accion) VALUES ($1, $2, $3)",
-		userID, id, "Baja Usuario")
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando la tarea"})
-	}
+	//Insert := db.DB.Table("acciones_usuario").Create(&models.Accion{
+	//	ID_Usuario: 213123, //
+	//	ID_Articulo: disableuser.ID,
+	//	Tipo_accion: "Alta Usuario"})
+
+	//if Insert.Error != nil {
+	//	return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando la tarea"})
+	//}
+
+	// Aca tendriamos que poner una columna en usuarios que se llame deleted y que si esta en null no se elimino y si tiene una fecha se elimino
 	return c.NoContent(http.StatusNoContent)
+}
+
+func GetUser(ID int) *models.Users {
+	var user models.Users
+	db.DB.Table("usuarios").Where("id = ?", ID).First(&user)
+	return &user
+}
+func GetUserByName(username string) *models.Users {
+	var user models.Users
+	db.DB.Table("usuarios").Where("username = ?", username).First(&user)
+	return &user
 }

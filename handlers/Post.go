@@ -9,22 +9,25 @@ import (
 )
 
 func PostProduct(c echo.Context) error {
+	//if user == nil {
+	//	return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Usuario no autenticado"})
+	//}
+	//if user.Master { todo esto }
 	var producto models.Producto
 
 	if err := c.Bind(&producto); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Error al parsear JSON"})
 	}
+	exist := db.ExistsProductoID(producto.ID, c)
 
-	identiti := db.ExistsTaskID(producto.ID, c)
-	if identiti == -1 {
-		_, err := db.DB.Exec(
-			"INSERT INTO productos (id, titulo, description, precio, stock) VALUES ($1, $2, $3, $4, $5)",
-			producto.ID, producto.Title, producto.Description, producto.Price, producto.Stock)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando la tarea"})
+	switch exist {
+	case -1:
+		result := db.DB.Table("productos").Create(&producto)
+		if result.Error != nil {
+			return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error insertando el producto"})
 		}
-	} else {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "El ID ya existe"})
+	case -2:
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error: En la consuta de la base de datos"})
 	}
-	return c.JSON(http.StatusCreated, producto)
+	return c.JSON(http.StatusOK, echo.Map{"Existe": "Existe: El producto ya existe"})
 }
